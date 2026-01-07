@@ -1,9 +1,10 @@
 # proxy4atipera
 
-Minimal Spring Boot (WebMVC) service that proxies GitHub REST API v3 to return:
-1) Only non-fork repositories
-2) Repository name + owner login
-3) Branches with the last commit SHA
+```md
+Minimal Spring Boot (WebMVC) service that proxies GitHub REST API v3 to return (branch details are fetched in parallel):
+ - Only non-fork repositories
+ - Repository name + owner login
+ - Branches with the last commit SHA
 
 ## Quick start
 
@@ -82,6 +83,10 @@ Note: if the user exists but has no public non-fork repositories, the response i
 ```
 
 ## Tests
+
+Integration tests use WireMock (fixed 1000ms delay per mocked GitHub request) and verify:
+- total number of GitHub calls (3)
+- total processing time in the 2000–3000ms range (branches are fetched in parallel)
 
 ```bash
 ./gradlew clean test
