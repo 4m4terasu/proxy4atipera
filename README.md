@@ -1,16 +1,14 @@
 # proxy4atipera
 
-```md
 Minimal Spring Boot (WebMVC) service that proxies GitHub REST API v3 to return (branch details are fetched in parallel):
- - Only non-fork repositories
- - Repository name + owner login
- - Branches with the last commit SHA
+- only non-fork repositories
+- repository name + owner login
+- branches with the last commit SHA
 
 ## Quick start
 
 ```bash
 ./gradlew bootRun
-````
 
 ```bash
 curl http://localhost:8080/users/4m4terasu/repositories
