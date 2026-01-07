@@ -17,6 +17,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.github.tomakehurst.wiremock.client.WireMock;
+import org.springframework.util.StopWatch;
+
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GithubProxyIntegrationTest {
 
@@ -35,54 +38,68 @@ class GithubProxyIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();
 
-    @Test
-    void shouldReturnNonForkReposWithBranches() throws Exception {
-        wiremock.stubFor(get(urlEqualTo("/users/john/repos"))
-                .willReturn(okJson("""
-                        [
-                          {
-                            "name": "fork-repo",
-                            "fork": true,
-                            "owner": { "login": "john" }
-                          },
-                          {
-                            "name": "main-repo",
-                            "fork": false,
-                            "owner": { "login": "john" }
-                          }
-                        ]
-                        """)));
+@Test
+void shouldFetchBranchesInParallel_andMeetTimingAndRequestCount() throws Exception {
+    WireMock.configureFor("localhost", wiremock.getRuntimeInfo().getHttpPort());
 
-        wiremock.stubFor(get(urlEqualTo("/repos/john/main-repo/branches"))
-                .willReturn(okJson("""
-                        [
-                          { "name": "main", "commit": { "sha": "aaa111" } },
-                          { "name": "dev",  "commit": { "sha": "bbb222" } }
-                        ]
-                        """)));
+    wiremock.stubFor(get(urlEqualTo("/users/john/repos"))
+            .willReturn(okJson("""
+                    [
+                      { "name": "repo-a", "fork": false, "owner": { "login": "john" } },
+                      { "name": "repo-b", "fork": false, "owner": { "login": "john" } },
+                      { "name": "repo-fork", "fork": true,  "owner": { "login": "john" } }
+                    ]
+                    """).withFixedDelay(1000)));
 
-        var req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/users/john/repositories"))
-                .GET()
-                .build();
+    wiremock.stubFor(get(urlEqualTo("/repos/john/repo-a/branches"))
+            .willReturn(okJson("""
+                    [
+                      { "name": "main", "commit": { "sha": "aaa111" } },
+                      { "name": "dev",  "commit": { "sha": "bbb222" } },
+                      { "name": "hotfix", "commit": { "sha": "ccc333" } }
+                    ]
+                    """).withFixedDelay(1000)));
 
-        var resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+    wiremock.stubFor(get(urlEqualTo("/repos/john/repo-b/branches"))
+            .willReturn(okJson("""
+                    [
+                      { "name": "main", "commit": { "sha": "ddd444" } },
+                      { "name": "dev",  "commit": { "sha": "eee555" } },
+                      { "name": "release", "commit": { "sha": "fff666" } }
+                    ]
+                    """).withFixedDelay(1000)));
 
-        assertThat(resp.statusCode()).isEqualTo(200);
+    var req = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/users/john/repositories"))
+            .GET()
+            .build();
 
-        assertThat(resp.body()).contains("\"repositoryName\":\"main-repo\"");
-        assertThat(resp.body()).contains("\"ownerLogin\":\"john\"");
-        assertThat(resp.body()).contains("\"name\":\"main\"");
-        assertThat(resp.body()).contains("\"lastCommitSha\":\"aaa111\"");
-        assertThat(resp.body()).doesNotContain("fork-repo");
-    }
+    StopWatch stopWatch = new StopWatch();
+    stopWatch.start();
+    var resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+    stopWatch.stop();
+
+    assertThat(resp.statusCode()).isEqualTo(200);
+
+    // fork repo must be filtered
+    assertThat(resp.body()).contains("\"repositoryName\":\"repo-a\"");
+    assertThat(resp.body()).contains("\"repositoryName\":\"repo-b\"");
+    assertThat(resp.body()).doesNotContain("repo-fork");
+
+    // total requests to GH (WireMock): 1 (repos) + 2 (branches) = 3
+    WireMock.verify(3, getRequestedFor(urlMatching(".*")));
+
+    long ms = stopWatch.getTotalTimeMillis();
+    assertThat(ms).isBetween(2000L, 3000L);
+}
 
     @Test
     void shouldReturn404WhenGithubUserDoesNotExist() throws Exception {
         wiremock.stubFor(get(urlEqualTo("/users/ghost/repos"))
                 .willReturn(aResponse()
                         .withStatus(404)
-                        .withBody("{\"message\":\"Not Found\"}")));
+                        .withBody("{\"message\":\"Not Found\"}")
+                        .withFixedDelay(1000)));
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/users/ghost/repositories"))

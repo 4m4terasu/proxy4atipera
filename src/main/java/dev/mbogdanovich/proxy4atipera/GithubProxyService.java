@@ -3,23 +3,30 @@ package dev.mbogdanovich.proxy4atipera;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 public class GithubProxyService {
 
     private final GithubClient githubClient;
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public GithubProxyService(GithubClient githubClient) {
         this.githubClient = githubClient;
     }
 
     public List<RepositoryResponse> listNonForkRepositories(String username) {
-        var repos = githubClient.getUserRepos(username);
-
-        return repos.stream()
+        var nonForkRepos = githubClient.getUserRepos(username).stream()
                 .filter(repo -> !repo.fork())
-                .map(repo -> toRepositoryResponse(repo))
                 .toList();
+
+        var futures = nonForkRepos.stream()
+                .map(repo -> CompletableFuture.supplyAsync(() -> toRepositoryResponse(repo), executor))
+                .toList();
+
+        return futures.stream().map(CompletableFuture::join).toList();
     }
 
     private RepositoryResponse toRepositoryResponse(GithubRepo repo) {
