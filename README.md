@@ -1,9 +1,9 @@
 # proxy4atipera
 
-Minimal Spring Boot (WebMVC) service that proxies GitHub API to return:
-1) only non-fork repositories
-2) repository name + owner login
-3) branches with the last commit SHA
+Minimal Spring Boot (WebMVC) service that proxies GitHub REST API v3 to return:
+1) Only non-fork repositories
+2) Repository name + owner login
+3) Branches with the last commit SHA
 
 ## Quick start
 
@@ -27,7 +27,7 @@ Returns an array of repositories with:
 
 Note: if the user exists but has no public non-fork repositories, the response is 200 with [].
 
-#### Example (200)
+#### Example (200, when user exists and has public non-fork repositories)
 
 ```json
 [
