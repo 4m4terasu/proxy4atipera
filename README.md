@@ -1,31 +1,33 @@
 # proxy4atipera
 
-A small Spring Boot proxy service that lists a GitHub user’s **non-fork** repositories together with their branches and last commit SHA
+Minimal Spring Boot (WebMVC) service that proxies GitHub API to return:
+1) only non-fork repositories
+2) repository name + owner login
+3) branches with the last commit SHA
 
-## Tech stack
+## Quick start
 
-- Java 25
-- Spring Boot 4.0.1 (WebMVC)
-- Spring RestClient
-- Gradle Kotlin DSL
-- Integration tests: JUnit 5 + WireMock
+```bash
+./gradlew bootRun
+````
 
-## API
+```bash
+curl http://localhost:8080/users/4m4terasu/repositories
+```
 
-### `GET /users/{username}/repositories`
+## Endpoint
 
-Returns only repositories where `fork = false`.
+### GET /users/{username}/repositories
 
-Response fields:
-- `repositoryName`
-- `ownerLogin`
-- `branches[]`:
-  - `name`
-  - `lastCommitSha`
+Returns an array of repositories with:
 
-#### 200 example
+* repositoryName
+* ownerLogin
+* branches: name, lastCommitSha
 
-Example response for `GET /users/4m4terasu/repositories`:
+Note: if the user exists but has no public non-fork repositories, the response is 200 with [].
+
+#### Example (200)
 
 ```json
 [
@@ -68,14 +70,21 @@ Example response for `GET /users/4m4terasu/repositories`:
     ]
   }
 ]
+```
 
-#### 404 example
-
-Example response for `GET /users/CristianoRonaldo777dontexist/repositories`:
+#### Example (404)
 
 ```json
 {
   "status": 404,
   "message": "GitHub user 'CristianoRonaldo777dontexist' not found"
 }
+```
 
+## Tests
+
+```bash
+./gradlew clean test
+```
+
+Stack: Java 25, Spring Boot 4.0.1 (WebMVC), Spring RestClient, Gradle Kotlin DSL, JUnit 5 + WireMock.
